@@ -125,7 +125,7 @@
 <div id="modal" class="hide"><div class="dlg"><p id="mTxt"></p><input id="mIn" class="hide"><div class="act"><button class="btn alt" id="mNo">Cancel</button><button class="btn" id="mYes">OK</button></div></div></div>
 <script>
 'use strict';
-const API = '/api/v1';
+const API = 'https://sfa-backend-wniw.onrender.com/api/v1';
 let token = sessionStorage.getItem('sfa_admin_token');
 let me = null, employees = [], page = 'overview';
 const $ = (id) => document.getElementById(id);
