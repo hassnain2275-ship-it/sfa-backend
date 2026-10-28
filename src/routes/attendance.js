@@ -6,6 +6,7 @@ const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { distanceMeters } = require('../utils/distance');
 const { insertExpense } = require('./expenses');
+const rules = require('../services/dailyRules');
 const router = express.Router();
 
 // Company-wide per-kilometer rate used for the automatic daily Travel
@@ -57,23 +58,47 @@ async function resolveAttendanceStatus(lat, lon) {
 }
 
 async function insertAttendanceRecord(userId, record) {
-  const { client_uuid, latitude, longitude, marked_at, created_offline } = record;
+  const { client_uuid, latitude, longitude, marked_at, created_offline, accuracy_m, mock_location } = record;
+
+  // ATT-01: only the FIRST check-in of a business day is the official one. A second tap
+  // (or a re-sent offline record) must not create another check-in for the same day.
+  try {
+    const { rows: first } = await pool.query(
+      `SELECT * FROM attendance WHERE user_id = $1 AND client_uuid <> $4
+          AND (marked_at AT TIME ZONE $2)::date = (($3::timestamptz) AT TIME ZONE $2)::date
+        ORDER BY marked_at LIMIT 1`, [userId, rules.TZ, marked_at, client_uuid]);
+    if (first[0]) return { ...first[0], already_checked_in: true };
+  } catch (e) { console.warn('[attendance] same-day check skipped:', e.message); }
+
+  const cfg = await rules.getSettings();
+  const windowStatus = cfg.checkin_window_enforce === 'off' ? null : rules.windowStatusOf(marked_at, cfg);
   const { status, customerId } = await resolveAttendanceStatus(latitude, longitude);
-  const result = await pool.query(
-    `INSERT INTO attendance (client_uuid, user_id, customer_id, latitude, longitude, status, marked_at, created_offline)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (client_uuid) DO NOTHING RETURNING *`,
-    [client_uuid, userId, customerId, latitude, longitude, status, marked_at, !!created_offline]
-  );
+  const base = [client_uuid, userId, customerId, latitude, longitude, status, marked_at, !!created_offline];
+
+  let result;
+  try {
+    result = await pool.query(
+      `INSERT INTO attendance (client_uuid, user_id, customer_id, latitude, longitude, status, marked_at, created_offline,
+                               location_accuracy_m, mock_location, window_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (client_uuid) DO NOTHING RETURNING *`,
+      [...base, accuracy_m ?? null, !!mock_location, windowStatus]);
+  } catch (err) {
+    if (err.code !== '42703') throw err; // 004_daily_activity.sql not run yet: save the old way, never lose a check-in
+    console.warn('[attendance] accuracy/mock/window columns missing - run sql/004_daily_activity.sql');
+    result = await pool.query(
+      `INSERT INTO attendance (client_uuid, user_id, customer_id, latitude, longitude, status, marked_at, created_offline)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (client_uuid) DO NOTHING RETURNING *`, base);
+  }
   return result.rows[0] || { client_uuid, status: 'already_synced' };
 }
 
 router.post('/mark', requireAuth, async (req, res) => {
   try {
-    const { client_uuid, latitude, longitude, marked_at } = req.body;
+    const { client_uuid, latitude, longitude, marked_at, accuracy_m, mock_location } = req.body;
     if (!client_uuid || latitude == null || longitude == null || !marked_at) {
       return res.status(400).json({ error: 'client_uuid, latitude, longitude, marked_at are required' });
     }
-    const record = await insertAttendanceRecord(req.user.id, { client_uuid, latitude, longitude, marked_at, created_offline: false });
+    const record = await insertAttendanceRecord(req.user.id, { client_uuid, latitude, longitude, marked_at, accuracy_m, mock_location, created_offline: false });
     res.status(201).json(record);
   } catch (err) {
     console.error(err);
@@ -191,6 +216,24 @@ router.post('/signout', requireAuth, async (req, res) => {
       });
     }
 
+    // 4.6: the day cannot be completed without the minimum number of market photos.
+    // Off by default (setting enforce_market_photos) until everyone has the new app.
+    const cfg = await rules.getSettings();
+    if (cfg.enforce_market_photos === 'true') {
+      const need = Number(cfg.min_market_photos) || 3;
+      try {
+        const { rows: pr } = await pool.query(
+          `SELECT COUNT(*)::int AS n FROM market_photos WHERE user_id = $1 AND photo_date = (now() AT TIME ZONE $2)::date`,
+          [req.user.id, rules.TZ]);
+        if (pr[0].n < need) {
+          return res.status(400).json({
+            error: `Upload at least ${need} market photos before you sign out (you have ${pr[0].n}).`,
+            requiresMarketPhotos: true, have: pr[0].n, need,
+          });
+        }
+      } catch (e) { if (e.code !== '42P01') throw e; }
+    }
+
     const kmTraveled = distanceMeters(
       Number(todayRecord.latitude), Number(todayRecord.longitude),
       Number(latitude), Number(longitude)
@@ -241,6 +284,13 @@ router.post('/signout', requireAuth, async (req, res) => {
           `daily Travel expense for user_id=${req.user.id}. Run: UPDATE app_settings SET value = '<real rate>' WHERE key = 'rate_per_km';`
         );
       }
+    }
+
+    // 5.3: build today's market visit summary (best effort - never blocks the sign-out)
+    try {
+      await rules.saveVisitSummary(req.user.id, req.body.market_visit_area);
+    } catch (e) {
+      if (e.code !== '42P01' && e.code !== '42703') console.warn('[signout] visit summary not saved:', e.message);
     }
 
     res.json(rows[0]);

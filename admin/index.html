@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SFA Admin Dashboard</title>
+<style>
+  @font-face { font-family:"IBM Plex Sans"; src:url(fonts/IBMPlexSans-Regular.ttf) format("truetype"); font-weight:400; font-display:swap; }
+  @font-face { font-family:"IBM Plex Sans"; src:url(fonts/IBMPlexSans-Medium.ttf) format("truetype"); font-weight:500; font-display:swap; }
+  @font-face { font-family:"IBM Plex Sans"; src:url(fonts/IBMPlexSans-SemiBold.ttf) format("truetype"); font-weight:600; font-display:swap; }
+  @font-face { font-family:"IBM Plex Sans"; src:url(fonts/IBMPlexSans-Bold.ttf) format("truetype"); font-weight:700; font-display:swap; }
+
+  /* Same tokens as the mobile app (flutter_app/lib/theme/app_theme.dart) */
+  :root { --bg:#F3F4F0; --card:#ffffff; --ink:#17211E; --muted:#66726C; --line:#DDE2DB; --line-strong:#B9C2BB;
+          --brand:#0F4C42; --on-brand:#ffffff; --side:#0A3730; --accent:#F0B429;
+          --ok:#2F7D52; --warn:#9A6410; --bad:#B8432F; --soft:#E1ECE8; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0F1614; --card:#17211E; --ink:#E6ECE8; --muted:#92A09A; --line:#26332E; --line-strong:#3A4A44;
+          --brand:#58BFA3; --on-brand:#0A2B25; --side:#0A1F1B; --ok:#66CB93; --warn:#E0A83F; --bad:#F0907E; --soft:#1E2E29; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+  :focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+
+  /* Shell: brand + header on top, navigation down the left, content right */
+  #app { display:grid; grid-template-columns:236px minmax(0,1fr); grid-template-rows:60px 1fr; grid-template-areas:"brand head" "nav main"; min-height:100vh; }
+  .brand { grid-area:brand; display:flex; align-items:center; gap:10px; padding:0 20px; background:var(--side); color:#fff; font-weight:600; font-size:17px; position:sticky; top:0; z-index:6; }
+  .mark { width:30px; height:30px; border-radius:9px; background:var(--accent); display:inline-flex; align-items:center; justify-content:center; }
+  .mark svg { width:62%; height:62%; }
+  header { grid-area:head; display:flex; align-items:center; gap:12px; padding:0 24px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:17px; font-weight:600; margin:0; flex:1; }
+  header .who { color:var(--muted); font-size:13px; }
+  nav { grid-area:nav; display:flex; flex-direction:column; gap:2px; padding:8px 10px 24px; background:var(--side); position:sticky; top:60px; height:calc(100vh - 60px); overflow-y:auto; }
+  nav button { border:0; background:none; text-align:left; padding:10px 12px; color:rgba(255,255,255,.72); font:inherit; font-weight:500; border-radius:8px; cursor:pointer; }
+  nav button:hover { background:rgba(255,255,255,.07); color:#fff; }
+  nav button.on { color:#fff; font-weight:600; background:rgba(255,255,255,.1); box-shadow:inset 3px 0 0 var(--accent); }
+  nav button:focus-visible { outline-color:var(--accent); }
+  main { grid-area:main; padding:22px 28px 48px; width:100%; max-width:1360px; }
+
+  .bar { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:18px; }
+  label { font-size:12.5px; font-weight:500; color:var(--muted); display:block; margin-bottom:4px; }
+  input, select { padding:8px 10px; border:1px solid var(--line-strong); border-radius:10px; background:var(--card); color:var(--ink); font:inherit; }
+  input:focus, select:focus { border-color:var(--brand); outline:2px solid var(--brand); outline-offset:-1px; }
+  button.btn { padding:9px 16px; border:1px solid var(--brand); background:var(--brand); color:var(--on-brand); border-radius:10px; cursor:pointer; font:inherit; font-weight:600; }
+  button.btn:hover { filter:brightness(1.08); }
+  button.btn.alt { background:transparent; color:var(--brand); border-color:var(--line-strong); }
+  button.btn.small { padding:4px 10px; font-size:12.5px; border-radius:8px; }
+
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .card .n { font-size:28px; line-height:1.15; font-weight:600; font-variant-numeric:tabular-nums; }
+  .card .l { color:var(--muted); font-size:13px; margin-top:2px; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:auto; margin-bottom:20px; }
+  table { border-collapse:collapse; width:100%; min-width:640px; }
+  th, td { padding:10px 14px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
+  tr:last-child td { border-bottom:0; }
+  th { font-size:12.5px; font-weight:600; color:var(--muted); background:var(--bg); position:sticky; top:0; }
+  tbody tr:hover td { background:var(--bg); }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.total td { font-weight:600; background:var(--soft); }
+  .tag { padding:2px 10px; border-radius:99px; font-size:12px; font-weight:600; background:var(--bg); }
+  .present, .synced { color:var(--ok); } .absent, .error { color:var(--bad); } .out_of_range, .pending { color:var(--warn); }
+  .note { color:var(--muted); font-size:13px; margin:6px 0 16px; }
+  .msg { padding:11px 14px; border-radius:10px; margin-bottom:14px; background:var(--bg); }
+  .msg.bad { color:var(--bad); background:color-mix(in srgb, var(--bad) 12%, var(--card)); }
+
+  #login { max-width:380px; margin:10vh auto; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:30px 28px; }
+  #login .mark { width:46px; height:46px; border-radius:13px; margin-bottom:18px; }
+  #login h2 { font-size:22px; font-weight:600; line-height:1.2; }
+  #login input { width:100%; margin-bottom:14px; }
+  #login button.btn { padding:11px 16px; }
+  .wrapcell { white-space:normal; min-width:240px; max-width:420px; }
+  .bar2 { height:10px; background:var(--line); border-radius:6px; overflow:hidden; margin-top:8px; } .bar2 > i { display:block; height:100%; background:var(--brand); }
+  .grid input { width:100%; min-width:110px; } .formrow { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; } .formrow > div { min-width:150px; }
+  .hide { display:none !important; }
+
+
+  #toasts { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:50; max-width:min(380px,calc(100vw - 40px)); }
+  .toast { background:var(--side); color:#fff; padding:11px 16px; border-radius:10px; font-size:13.5px; box-shadow:0 6px 24px rgba(0,0,0,.22); }
+  .toast.bad { background:var(--bad); }
+  #modal { position:fixed; inset:0; background:rgba(10,20,17,.5); display:flex; align-items:center; justify-content:center; z-index:60; padding:20px; }
+  #modal.hide { display:none; }
+  .dlg { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px; width:min(400px,100%); }
+  .dlg p { margin:0 0 14px; font-weight:500; }
+  .dlg input { width:100%; margin-bottom:14px; }
+  .dlg .act { display:flex; gap:10px; justify-content:flex-end; }
+
+  @media (max-width: 860px) {
+    #app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto auto 1fr; grid-template-areas:"brand" "head" "nav" "main"; }
+    .brand { height:52px; position:static; }
+    header { height:56px; padding:0 16px; }
+    nav { flex-direction:row; overflow-x:auto; overflow-y:hidden; height:auto; position:static; padding:8px 10px; }
+    nav button { white-space:nowrap; }
+    nav button.on { box-shadow:inset 0 -3px 0 var(--accent); }
+    main { padding:16px 14px 40px; }
+  }
+  @media (prefers-reduced-motion: no-preference) { button.btn, nav button { transition:background .15s, filter .15s; } }
+</style>
+</head>
+<body>
+
+<section id="login" class="hide">
+  <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#17211E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M12 12 6.5 6.5"/><path d="M12 12l5.5-5.5"/><path d="M6.5 11V6.5H11"/><path d="M17.5 11V6.5H13"/></svg></span>
+  <h2 style="margin-top:0">Sign in to the dashboard</h2>
+  <label>Email / User Code</label><input id="u" autocomplete="username" autocapitalize="none">
+  <label>Password</label><input id="p" type="password" autocomplete="current-password">
+  <div id="loginErr" class="msg bad hide"></div>
+  <button class="btn" style="width:100%" onclick="doLogin()">Log in</button>
+  <p class="note">For supervisors and admins. Field employees use the mobile app.</p>
+</section>
+
+<div id="app" class="hide">
+  <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#17211E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M12 12 6.5 6.5"/><path d="M12 12l5.5-5.5"/><path d="M6.5 11V6.5H11"/><path d="M17.5 11V6.5H13"/></svg></span><span>SFA</span></div>
+  <header>
+    <h1>Admin dashboard</h1>
+    <span class="who" id="who"></span>
+    <button class="btn alt small" onclick="logout()">Log out</button>
+  </header>
+  <nav id="nav"></nav>
+  <main>
+    <div class="bar" id="filters"></div>
+    <div id="out"></div>
+  </main>
+</div>
+
+<div id="toasts"></div>
+<div id="modal" class="hide"><div class="dlg"><p id="mTxt"></p><input id="mIn" class="hide"><div class="act"><button class="btn alt" id="mNo">Cancel</button><button class="btn" id="mYes">OK</button></div></div></div>
+<script>
+'use strict';
+const API = '/api/v1';
+let token = sessionStorage.getItem('sfa_admin_token');
+let me = null, employees = [], page = 'overview';
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const money = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const qty = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+
+
+function friendly(e) {
+  console.error(e); // technical detail goes to the browser console only
+  const m = (e && e.message) ? String(e.message) : '';
+  if (!m || /failed to fetch|networkerror|load failed|network request failed/i.test(m)) return 'Cannot reach the server. Check your connection and try again.';
+  return m;
+}
+function toast(msg, bad) {
+  const t = document.createElement('div'); t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = msg;
+  $('toasts').appendChild(t); setTimeout(() => t.remove(), bad ? 6500 : 3500);
+}
+function dialog(msg, withInput, def) {
+  return new Promise((res) => {
+    const i = $('mIn'); $('mTxt').textContent = msg; i.classList.toggle('hide', !withInput); i.value = def || '';
+    $('modal').classList.remove('hide'); (withInput ? i : $('mYes')).focus();
+    const done = (v) => { $('modal').classList.add('hide'); res(v); };
+    $('mYes').onclick = () => done(withInput ? i.value : true);
+    $('mNo').onclick = () => done(withInput ? null : false);
+    i.onkeydown = (ev) => { if (ev.key === 'Enter') $('mYes').click(); if (ev.key === 'Escape') $('mNo').click(); };
+  });
+}
+const askConfirm = (m) => dialog(m, false);
+const askText = (m, d) => dialog(m, true, d);
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token, ...(opts.headers || {}) } });
+  const isJson = (r.headers.get('content-type') || '').includes('json');
+  if (r.status === 401) { logout(); throw new Error('Session expired - please log in again'); }
+  const body = isJson ? await r.json() : await r.blob();
+  if (!r.ok) {
+    if (r.status >= 500) { console.error('Server error', r.status, body); throw new Error('Something went wrong on the server. Please try again in a moment.' + (body && body.ref ? ' (ref ' + body.ref + ')' : '')); }
+    throw new Error((body && body.error) || 'Something went wrong. Please try again.');
+  }
+  return body;
+}
+
+async function doLogin() {
+  $('loginErr').classList.add('hide');
+  try {
+    const u = $('u').value.trim();
+    const r = await fetch(API + '/auth/admin-login', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: u, username: u, password: $('p').value }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Login failed');
+    if (!['admin', 'supervisor'].includes(j.user.role)) throw new Error('This dashboard is for supervisors and admins only.');
+    token = j.token; sessionStorage.setItem('sfa_admin_token', token);
+    await start();
+  } catch (e) { $('loginErr').textContent = friendly(e); $('loginErr').classList.remove('hide'); }
+}
+function logout() { sessionStorage.removeItem('sfa_admin_token'); token = null; $('app').classList.add('hide'); $('login').classList.remove('hide'); }
+
+async function start() {
+  try { me = await api('/admin/me'); employees = await api('/admin/employees'); }
+  catch (e) { logout(); $('loginErr').textContent = friendly(e); $('loginErr').classList.remove('hide'); return; }
+  $('login').classList.add('hide'); $('app').classList.remove('hide');
+  $('who').textContent = me.name + ' (' + me.role + ')';
+  const tabs = [['overview', 'Overview'], ['attendance', 'Attendance'], ['photos', 'Market Photos'], ['daily', 'Daily Activity'], ['locations', 'Location History'], ['orders', 'Secondary Sales'],
+    ['visits', 'Shop Visits'], ['plans', 'Plans'], ['planreport', 'Plan vs Achieved'], ['sapreports', 'SAP Reports'], ['corrections', 'Corrections'], ['sync', 'SAP Sync Health']];
+  if (me.role === 'admin') tabs.push(['master', 'Master Data'], ['users', 'Users & Roles'], ['settings', 'Settings'], ['audit', 'Audit Log']);
+  $('nav').innerHTML = tabs.map(([k, t]) => '<button data-k="' + k + '" onclick="go(\'' + k + '\')">' + t + '</button>').join('');
+  go('overview');
+}
+
+function filtersHtml(withEmp) {
+  return '<div><label>From</label><input type="date" id="f_from" value="' + (window._from || today()) + '"></div>' +
+    '<div><label>To</label><input type="date" id="f_to" value="' + (window._to || today()) + '"></div>' +
+    (withEmp ? '<div><label>Employee</label><select id="f_emp"><option value="">All</option>' +
+      employees.map((e) => '<option value="' + e.id + '"' + (String(window._emp) === String(e.id) ? ' selected' : '') + '>' + esc(e.name) + '</option>').join('') + '</select></div>' : '') +
+    '<button class="btn" onclick="go(page)">Show</button>';
+}
+function qs() {
+  const from = $('f_from') ? $('f_from').value : '', to = $('f_to') ? $('f_to').value : '', emp = $('f_emp') ? $('f_emp').value : '';
+  window._from = from; window._to = to; window._emp = emp;
+  const p = new URLSearchParams(); if (from) p.set('from', from); if (to) p.set('to', to); if (emp) p.set('employee_id', emp);
+  return p.toString();
+}
+async function download(kind) {
+  try {
+    const blob = await api('/admin/export/' + kind + '?' + qs());
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = kind + '.xlsx'; a.click(); URL.revokeObjectURL(a.href);
+  } catch (e) { toast(friendly(e), true); }
+}
+function table(cols, rows, totalRow) {
+  if (!rows.length) return '<div class="box"><div style="padding:16px;color:var(--muted)">No records for this selection.</div></div>';
+  const head = cols.map((c) => '<th class="' + (c.num ? 'num' : '') + '">' + esc(c.h) + '</th>').join('');
+  const body = rows.map((r) => '<tr>' + cols.map((c) => {
+    const raw = c.html ? c.html(r) : esc(c.f ? c.f(r[c.k], r) : r[c.k]);
+    return '<td class="' + (c.num ? 'num ' : '') + (c.wrap ? 'wrapcell' : '') + '">' + raw + '</td>';
+  }).join('') + '</tr>').join('');
+  const tot = totalRow ? '<tr class="total">' + cols.map((c, i) => '<td class="' + (c.num ? 'num' : '') + '">' + (i === 0 ? 'TOTAL' : esc(totalRow[c.k] != null ? (c.f ? c.f(totalRow[c.k]) : totalRow[c.k]) : '')) + '</td>').join('') + '</tr>' : '';
+  return '<div class="box"><table><thead><tr>' + head + '</tr></thead><tbody>' + body + tot + '</tbody></table></div>';
+}
+const tag = (s, label) => '<span class="tag ' + esc(s) + '">' + esc(label || String(s).replace('_', ' ')) + '</span>';
+
+async function go(k) {
+  page = k;
+  document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.k === k));
+  const out = $('out'); out.innerHTML = '<p class="note">Loading...</p>';
+  try {
+    if (k === 'overview') { $('filters').innerHTML = ''; return await overview(out); }
+    if (k === 'attendance') { $('filters').innerHTML = filtersHtml(true); return await attendance(out); }
+    if (k === 'orders') { $('filters').innerHTML = filtersHtml(true); return await orders(out); }
+    if (k === 'visits') { $('filters').innerHTML = filtersHtml(true); return await visits(out); }
+    if (k === 'locations') { $('filters').innerHTML = filtersHtml(true).replace('<label>To</label><input type="date" id="f_to" value="' + (window._to || today()) + '">', '<label>(one day)</label><input type="date" id="f_to" value="' + (window._to || today()) + '" disabled>'); return await locations(out); }
+    if (k === 'plans') { $('filters').innerHTML = ''; return await plans(out); }
+    if (k === 'planreport') { return await planReport(out); }
+    if (k === 'sapreports') { $('filters').innerHTML = ''; return await sapReports(out); }
+    if (k === 'photos') { $('filters').innerHTML = filtersHtml(true); return await photos(out); }
+    if (k === 'daily') { $('filters').innerHTML = filtersHtml(true); return await daily(out); }
+    if (k === 'corrections') { $('filters').innerHTML = ''; return await corrections(out); }
+    if (k === 'master') { $('filters').innerHTML = ''; return await master(out); }
+    if (k === 'settings') { $('filters').innerHTML = ''; return await settings(out); }
+    if (k === 'sync') { $('filters').innerHTML = ''; return await sync(out); }
+    if (k === 'users') { $('filters').innerHTML = ''; return await users(out); }
+    if (k === 'audit') { $('filters').innerHTML = ''; return await auditLog(out); }
+  } catch (e) { out.innerHTML = '<div class="msg bad">' + esc(friendly(e)) + '</div>'; }
+}
+
+
+// ---------------- SAP Reports (read live from SAP) ----------------
+const SR = {
+  'region-sales': { title: 'Invoice Wise Region Sales', kind: 'Invoices', note: 'Provisional. Built from the client\'s saved query; compare the totals with SAP\'s own report before relying on it.', filters: ['item', 'region', 'town', 'area', 'customer'] },
+  'monthly-sales': { title: 'Monthly sales', kind: 'Sales orders', note: 'Sales orders in SAP, grouped by month and customer. Amounts are before tax.', filters: ['item', 'customer'] },
+  'party-wise': { title: 'Party wise sales', kind: 'Sales orders', note: 'Sales orders in SAP, grouped by customer. Amounts are before tax.', filters: ['item', 'customer'] },
+  'customer-status': { title: 'Monthly customer status', kind: 'Sales orders', note: 'Orders, amount before tax and last order date per customer per month.', filters: ['item', 'customer'] },
+  'order-lines': { title: 'Order lines with brand', kind: 'Sales orders', note: 'Every order line with sales employee and brand (the item group).', filters: ['item', 'customer'] },
+};
+const SR_LABEL = { item: ['Item code(s)', 'e.g. FG20046'], region: ['Region', 'e.g. SOUTH KPK'], town: ['Town', 'e.g. WANNA'], area: ['Area', 'e.g. WAZIRISTAN'], customer: ['Customer code(s)', 'e.g. CUS-0279'] };
+async function sapReports(out) {
+  const first = today().slice(0, 8) + '01';
+  out.innerHTML = '<div class="bar"><div><label>Report</label><select id="sr_name" onchange="srPick()">' +
+    Object.keys(SR).map((k) => '<option value="' + k + '">' + esc(SR[k].title) + ' (' + SR[k].kind.toLowerCase() + ')</option>').join('') + '</select></div>' +
+    '<div><label>From</label><input type="date" id="sr_from" value="' + first + '"></div><div><label>To</label><input type="date" id="sr_to" value="' + today() + '"></div>' +
+    '<span id="srFilters" style="display:contents"></span>' +
+    '<button class="btn" onclick="runSapReport()">Show</button><button class="btn alt" onclick="downloadSapReport()">Excel</button></div>' +
+    '<div id="srNote" class="msg" style="background:var(--soft)"></div><div id="srOut"></div>';
+  srPick();
+}
+function srPick() {
+  const r = SR[$('sr_name').value];
+  $('srFilters').innerHTML = r.filters.map((k) => '<div><label>' + SR_LABEL[k][0] + '</label><input id="sr_' + k + '" placeholder="' + SR_LABEL[k][1] + '" style="width:150px"></div>').join('');
+  $('srNote').innerHTML = '<b>' + esc(r.title) + '</b> &middot; read live from SAP (' + r.kind.toLowerCase() + '). ' + esc(r.note) + ' Several codes can be separated with commas.';
+  $('srOut').innerHTML = '';
+}
+function srParams() {
+  const p = new URLSearchParams();
+  ['from', 'to', 'item', 'region', 'town', 'area', 'customer'].forEach((k) => { const el = $('sr_' + k); const v = el ? el.value.trim() : ''; if (v) p.set(k, v); });
+  return p.toString();
+}
+async function runSapReport() {
+  const box = $('srOut'); box.innerHTML = '<p class="note">Reading from SAP...</p>';
+  try {
+    const d = await api('/admin/sap-reports/' + encodeURIComponent($('sr_name').value) + '?' + srParams());
+    const n = (v) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+    const tot = {};
+    const cols = d.columns.map((c) => {
+      if (c.total) tot[c.key] = d.rows.reduce((s, r) => s + (Number(r[c.key]) || 0), 0);
+      return c.type === 'n' ? { h: c.label, k: c.key, num: true, f: n } : { h: c.label, k: c.key };
+    });
+    box.innerHTML = '<p class="note">' + d.rows.length + ' row(s)' + (d.truncated ? ' - only the first 5,000 are shown, narrow the dates or filters' : '') + '</p>' + table(cols, d.rows, Object.keys(tot).length ? tot : undefined);
+  } catch (e) { box.innerHTML = '<div class="msg bad">' + esc(friendly(e)) + '</div>'; }
+}
+async function downloadSapReport() {
+  try {
+    const name = $('sr_name').value;
+    const blob = await api('/admin/sap-reports/' + encodeURIComponent(name) + '/export?' + srParams());
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name + '.xlsx'; a.click(); URL.revokeObjectURL(a.href);
+  } catch (e) { toast(friendly(e), true); }
+}
+
+async function overview(out) {
+  const d = await api('/admin/overview');
+  const c = (n, l) => '<div class="card"><div class="n">' + esc(n) + '</div><div class="l">' + esc(l) + '</div></div>';
+  out.innerHTML = '<p class="note">Today, ' + esc(d.date) + (me.role === 'supervisor' ? ' - your team' : ' - all employees') + '</p><div class="cards">' +
+    c(d.employees, 'Employees') + c(d.present, 'Present') + c(d.out_of_range, 'Checked in, out of range') + c(d.absent, 'Absent / not yet in') +
+    c(d.orders_today, 'Orders today') + c('Rs ' + money(d.value_today), 'Order value today') + '</div>' +
+    '<h3>SAP order sync</h3><div class="cards">' + c(d.sync.synced, 'Synced') + c(d.sync.pending, 'Pending') + c(d.sync.error, 'Failed') + '</div>';
+}
+async function attendance(out) {
+  const d = await api('/admin/attendance?' + qs());
+  const flags = await api('/admin/mock-flags?' + qs());
+  const s = d.summary;
+  const card = (n, l) => '<div class="card"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>';
+  const capTag = (v) => v ? tag(v === 'captured' ? 'synced' : v === 'missed' ? 'error' : 'pending', v) : '';
+  const winTag = (v) => v ? tag(v === 'on_time' ? 'synced' : v === 'corrected' ? 'synced' : 'pending', String(v).replace('_', ' ')) : '';
+  out.innerHTML = '<div style="margin-bottom:10px"><button class="btn alt" onclick="download(\'attendance\')">Export Excel</button></div>' +
+    '<div class="cards">' + card(s.present, 'Present') + card(s.out_of_range, 'Out of range') + card(s.absent, 'Absent') + card(s.late, 'Late check-ins') + card(s.flagged, 'Mock-GPS flagged') + '</div>' +
+    table([{ h: 'Date', k: 'day' }, { h: 'Employee', k: 'employee' }, { h: 'Status', html: (r) => tag(r.status) }, { h: 'Check-in', k: 'check_in' },
+      { h: 'Window', html: (r) => winTag(r.window) }, { h: '12:00', html: (r) => capTag(r.noon) }, { h: '16:00', html: (r) => capTag(r.evening) },
+      { h: 'Compliance', k: 'compliance', num: true, f: (v) => (v == null ? '' : v + '%') }, { h: 'GPS flag', html: (r) => r.flagged ? tag('error', 'review') : '' },
+      { h: 'Check-out', k: 'check_out' }, { h: 'Shop matched', k: 'shop' }, { h: 'KM', k: 'km', num: true, f: (v) => (v == null ? '' : qty(v)) },
+      { h: 'Orders', k: 'orders', num: true }, { h: 'Photo', html: (r) => r.photo ? '<a href="' + esc(r.photo) + '" target="_blank" rel="noopener">view</a>' : '' }], d.rows) +
+    '<p class="note">Absent = no check-in for that day (ATT-02). Compliance = valid captures out of the captures due (check-in, 12:00, 16:00); mock-GPS records are left out until reviewed (ATT-06).</p>' +
+    '<h3>Mock-GPS review queue</h3>' + (flags.length ? table([{ h: 'Date', k: 'day' }, { h: 'Time', k: 'time' }, { h: 'Employee', k: 'employee' }, { h: 'Record', k: 'label' },
+      { h: 'Location', html: (r) => esc(Number(r.latitude).toFixed(5) + ', ' + Number(r.longitude).toFixed(5)) },
+      { h: '', html: (r) => '<button class="btn small" onclick="reviewFlag(\'' + r.kind + '\',' + r.id + ',\'accepted\')">Accept</button> <button class="btn alt small" onclick="reviewFlag(\'' + r.kind + '\',' + r.id + ',\'rejected\')">Reject</button>' }], flags)
+      : '<div class="box"><div style="padding:16px;color:var(--muted)">Nothing waiting for review.</div></div>');
+}
+async function reviewFlag(kind, id, decision) {
+  try { await api('/admin/mock-flags/' + kind + '/' + id + '/review', { method: 'POST', body: JSON.stringify({ decision }) }); go('attendance'); } catch (e) { toast(friendly(e), true); }
+}
+async function photos(out) {
+  const d = await api('/admin/photos?' + qs());
+  const per = d.per_day.map((p) => '<tr><td>' + esc(p.day) + '</td><td>' + esc(p.employee) + '</td><td class="num">' + p.count + ' / ' + d.min + '</td><td>' + (p.ok ? tag('synced', 'meets minimum') : tag('error', 'below minimum')) + '</td></tr>').join('');
+  const grid = d.rows.map((r) => '<div class="card" style="padding:8px"><a href="' + esc(r.url) + '" target="_blank" rel="noopener"><img src="' + esc(r.url) + '" alt="market photo" style="width:100%;height:140px;object-fit:cover;border-radius:6px"></a>' +
+    '<div class="l">' + esc(r.employee) + '<br>' + esc(r.day) + ' ' + esc(r.time) + '<br>' + Number(r.latitude).toFixed(4) + ', ' + Number(r.longitude).toFixed(4) + (r.mock ? ' - mock GPS' : '') + (r.reason ? '<br><b>Reason:</b> ' + esc(r.reason) : '') + '</div></div>').join('');
+  out.innerHTML = (d.note ? '<div class="msg">' + esc(d.note) + '</div>' : '') +
+    '<div class="box"><table><thead><tr><th>Date</th><th>Employee</th><th class="num">Photos</th><th>Minimum</th></tr></thead><tbody>' + (per || '<tr><td colspan="4">No photos in this range.</td></tr>') + '</tbody></table></div>' +
+    '<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">' + grid + '</div>';
+}
+async function locations(out) {
+  if (!$('f_emp') || !$('f_emp').value) { out.innerHTML = '<p class="note">Choose an employee and a date, then press Show.</p>'; return; }
+  const d = await api('/admin/location-history?' + qs());
+  out.innerHTML = '<p class="note">' + d.points.length + ' location points on ' + esc(d.day) + '.</p>' +
+    table([{ h: 'Time', k: 'time' }, { h: 'Source', k: 'source' }, { h: 'Latitude', k: 'latitude', num: true, f: (v) => Number(v).toFixed(5) },
+      { h: 'Longitude', k: 'longitude', num: true, f: (v) => Number(v).toFixed(5) },
+      { h: 'Map', html: (r) => '<a href="https://www.google.com/maps?q=' + Number(r.latitude) + ',' + Number(r.longitude) + '" target="_blank" rel="noopener">open</a>' }], d.points);
+}
+function monthRange() {
+  const [y, m] = today().split('-').map(Number); const last = new Date(Date.UTC(y, m, 0)).getUTCDate(); const mm = String(m).padStart(2, '0');
+  return [y + '-' + mm + '-01', y + '-' + mm + '-' + String(last).padStart(2, '0')];
+}
+const num0 = (v) => (v === null || v === undefined ? '-' : qty(v));
+
+// ---------------- Plans: list + grid form ----------------
+async function plans(out) {
+  const list = await api('/plans');
+  out.innerHTML = '<div style="margin-bottom:10px"><button class="btn" onclick="planForm()">+ New plan</button></div>' +
+    table([{ h: 'Plan', k: 'name' }, { h: 'Employee', k: 'employee' }, { h: 'From', k: 'period_from' }, { h: 'To', k: 'period_to' },
+      { h: 'Target amount', k: 'target_amount', num: true, f: (v) => (v == null ? '-' : money(v)) }, { h: 'Target qty', k: 'target_qty', num: true, f: num0 },
+      { h: 'Target weight (KG)', k: 'target_weight', num: true, f: num0 }, { h: 'Route rows', k: 'route_rows', num: true },
+      { h: 'Status', html: (r) => tag(r.status === 'active' ? 'synced' : 'error', r.status) },
+      { h: '', html: (r) => r.status === 'active' ? '<button class="btn alt small" onclick="planForm(' + Number(r.id) + ')">Edit</button> <button class="btn alt small" onclick="cancelPlan(' + Number(r.id) + ')">Cancel plan</button>' : '' }], list) +
+    '<p class="note">Every employee has their own plan: a name, a period, targets and a route grid. Employees see their own plan and route in the app. The plan can also be filled from the SAP plan form once its structure is shared.</p>';
+}
+function routeRow(r) {
+  r = r || {};
+  const v = (x) => esc(x == null ? '' : x);
+  return '<tr><td><input type="date" class="r_date" value="' + v(r.route_date) + '"></td><td><input class="r_from" value="' + v(r.from_location) + '" maxlength="120"></td>' +
+    '<td><input class="r_town" value="' + v(r.town) + '" maxlength="120"></td><td><input class="r_area" value="' + v(r.area) + '" maxlength="120"></td>' +
+    '<td><input class="r_to" value="' + v(r.to_location) + '" maxlength="120"></td>' +
+    '<td><input class="r_rem" value="' + v(r.remarks) + '" maxlength="300"></td><td><button class="btn alt small" onclick="this.closest(\'tr\').remove()">x</button></td></tr>';
+}
+
+async function downloadRouteFormat() {
+  try {
+    const blob = await api('/plans/routes-template' + (window._planId ? '?plan_id=' + Number(window._planId) : ''));
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'route_plan_format.xlsx'; a.click(); URL.revokeObjectURL(a.href);
+  } catch (e) { toast(friendly(e), true); }
+}
+function importRoutes(inp) {
+  const f = inp.files && inp.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = async () => {
+    try {
+      const emp = $('pf_emp').value;
+      const r = await api('/plans/routes-parse', { method: 'POST', body: JSON.stringify({ file: String(rd.result).split(',')[1], employee_id: emp ? Number(emp) : undefined }) });
+      if (r.routes.length) $('routeBody').innerHTML = r.routes.map(routeRow).join('');
+      const eb = $('pf_err');
+      if (r.errors.length) { eb.innerHTML = r.errors.map(esc).join('<br>'); eb.classList.remove('hide'); } else { eb.classList.add('hide'); }
+      toast(r.routes.length + ' route row(s) loaded' + (r.errors.length ? ', ' + r.errors.length + ' skipped' : '') + '. Check them, then press Save plan.', r.routes.length === 0);
+    } catch (e) { toast(friendly(e), true); }
+    inp.value = '';
+  };
+  rd.readAsDataURL(f);
+}
+function addRouteRow() { $('routeBody').insertAdjacentHTML('beforeend', routeRow()); }
+async function planForm(id) {
+  let p = { name: '', user_id: '', period_from: monthRange()[0], period_to: monthRange()[1], target_amount: '', target_qty: '', target_weight: '', routes: [] };
+  if (id) p = await api('/plans/' + id);
+  const n = (x) => (x == null ? '' : x);
+  const emps = employees.map((e) => '<option value="' + Number(e.id) + '"' + (Number(p.user_id) === Number(e.id) ? ' selected' : '') + '>' + esc(e.name) + '</option>').join('');
+  window._planId = id || null;
+  $('out').innerHTML = '<h3>' + (id ? 'Edit plan' : 'New plan') + '</h3><div id="pf_err" class="msg bad hide"></div>' +
+    '<div class="formrow"><div><label>Plan name</label><input id="pf_name" value="' + esc(p.name) + '" maxlength="120"></div>' +
+    '<div><label>Employee</label><select id="pf_emp"><option value="">Choose...</option>' + emps + '</select></div>' +
+    '<div><label>From date</label><input type="date" id="pf_from" value="' + esc(p.period_from) + '"></div><div><label>To date</label><input type="date" id="pf_to" value="' + esc(p.period_to) + '"></div></div>' +
+    '<div class="formrow"><div><label>Target amount (Rs)</label><input id="pf_amount" type="number" min="0" step="any" value="' + esc(n(p.target_amount)) + '"></div>' +
+    '<div><label>Target quantity</label><input id="pf_qty" type="number" min="0" step="any" value="' + esc(n(p.target_qty)) + '"></div>' +
+    '<div><label>Target weight (KG)</label><input id="pf_weight" type="number" min="0" step="any" value="' + esc(n(p.target_weight)) + '"></div></div>' +
+    '<h3>Route plan</h3><div class="box"><table class="grid"><thead><tr><th>Date</th><th>From location</th><th>Town</th><th>Area</th><th>To location</th><th>Remarks</th><th></th></tr></thead><tbody id="routeBody">' +
+    (p.routes.length ? p.routes.map(routeRow).join('') : routeRow() + routeRow() + routeRow()) + '</tbody></table></div>' +
+    '<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn alt" onclick="addRouteRow()">+ Add row</button>' +
+    '<button class="btn alt" onclick="$(\'routeFile\').click()">Import from Excel</button>' +
+    '<button class="btn alt" onclick="downloadRouteFormat()">' + (id ? 'Download this route as Excel' : 'Download Excel format') + '</button>' +
+    '<input type="file" id="routeFile" class="hide" accept=".xlsx" onchange="importRoutes(this)"></div>' +
+    '<button class="btn" onclick="savePlan()">Save plan</button> <button class="btn alt" onclick="go(\'plans\')">Back</button>' +
+    '<p class="note">Targets can be left empty. Route dates must fall inside the plan period. Empty route rows are ignored.</p>';
+}
+async function savePlan() {
+  const routes = [...document.querySelectorAll('#routeBody tr')].map((tr) => ({ route_date: tr.querySelector('.r_date').value, from_location: tr.querySelector('.r_from').value, town: tr.querySelector('.r_town').value,
+    to_location: tr.querySelector('.r_to').value, area: tr.querySelector('.r_area').value, remarks: tr.querySelector('.r_rem').value }));
+  const body = { name: $('pf_name').value, user_id: Number($('pf_emp').value) || 0, period_from: $('pf_from').value, period_to: $('pf_to').value,
+    target_amount: $('pf_amount').value, target_qty: $('pf_qty').value, target_weight: $('pf_weight').value, routes };
+  try {
+    await api(window._planId ? '/plans/' + window._planId : '/plans', { method: window._planId ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    go('plans');
+  } catch (e) { $('pf_err').textContent = friendly(e); $('pf_err').classList.remove('hide'); window.scrollTo(0, 0); }
+}
+async function cancelPlan(id) {
+  if (!(await askConfirm('Cancel this plan? It will stop counting in reports.'))) return;
+  try { await api('/plans/' + id + '/cancel', { method: 'POST' }); go('plans'); } catch (e) { toast(friendly(e), true); }
+}
+
+// ---------------- Plan vs Achieved report: Employee + From + To (default = current month) ----------------
+function planQs() {
+  const emp = $('pr_emp') ? $('pr_emp').value : ''; const from = $('pr_from').value, to = $('pr_to').value;
+  const p = new URLSearchParams(); if (emp) p.set('employee_id', emp); if (from) p.set('from', from); if (to) p.set('to', to); return p.toString();
+}
+async function planDownload(fmt) {
+  try { const blob = await api('/plans/report?' + planQs() + '&format=' + fmt); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'plan_vs_achieved.' + fmt; a.click(); URL.revokeObjectURL(a.href); }
+  catch (e) { toast(friendly(e), true); }
+}
+async function planReport(out) {
+  const [mf, mt] = monthRange(); const keepEmp = $('pr_emp') ? $('pr_emp').value : (employees[0] ? String(employees[0].id) : '');
+  const keepFrom = $('pr_from') ? $('pr_from').value : mf, keepTo = $('pr_to') ? $('pr_to').value : mt;
+  $('filters').innerHTML = '<div><label>Employee Name</label><select id="pr_emp">' + employees.map((e) => '<option value="' + Number(e.id) + '"' + (String(e.id) === keepEmp ? ' selected' : '') + '>' + esc(e.name) + '</option>').join('') + '</select></div>' +
+    '<div><label>From Date</label><input type="date" id="pr_from" value="' + keepFrom + '"></div><div><label>To Date</label><input type="date" id="pr_to" value="' + keepTo + '"></div>' +
+    '<button class="btn" onclick="planReport($(\'out\'))">Show</button> <button class="btn alt" onclick="planDownload(\'xlsx\')">Excel</button> <button class="btn alt" onclick="planDownload(\'pdf\')">PDF</button>';
+  if (!employees.length) { out.innerHTML = '<p class="note">No employees in your team yet.</p>'; return; }
+  const d = await api('/plans/report?' + planQs());
+  const meter = (label, k, fmtFn) => {
+    const pct = d.pct[k]; const w = pct == null ? 0 : Math.min(pct, 100);
+    return '<div class="card"><div class="l">' + label + '</div><div class="n">' + (pct == null ? '-' : pct + '%') + '</div><div class="bar2"><i style="width:' + w + '%"></i></div>' +
+      '<div class="l" style="margin-top:8px">Achieved ' + fmtFn(d.achieved[k]) + ' of ' + (d.target[k] == null ? 'no target' : fmtFn(d.target[k])) + '</div></div>';
+  };
+  out.innerHTML = '<p class="note">' + esc(d.employee.name) + ' &middot; ' + esc(d.from) + ' to ' + esc(d.to) + ' &middot; counts orders booked in the app that have reached SAP &middot; ' + d.achieved.orders + ' orders</p>' +
+    '<div class="cards">' + meter('Amount (Rs)', 'amount', money) + meter('Quantity', 'qty', qty) + meter('Weight (KG)', 'weight', qty) + '</div>' +
+    (d.plans.length ? '<h3>Plans counted</h3>' + table([{ h: 'Plan', k: 'name' }, { h: 'From', k: 'period_from' }, { h: 'To', k: 'period_to' }, { h: 'Share counted', k: 'share', num: true, f: (v) => v + '%' }], d.plans) : '') +
+    d.notes.map((x) => '<div class="msg">' + esc(x) + '</div>').join('') +
+    '<h3>Route plan in these dates</h3>' + table([{ h: 'Date', k: 'route_date' }, { h: 'Plan', k: 'plan' }, { h: 'From location', k: 'from_location' }, { h: 'To location', k: 'to_location' }, { h: 'Area', k: 'area' }, { h: 'Remarks', k: 'remarks', wrap: true }], d.routes);
+}
+
+async function daily(out) {
+  const d = await api('/admin/daily-activity?' + qs());
+  out.innerHTML = '<div style="margin-bottom:10px"><button class="btn alt" onclick="download(\'daily-activity\')">Export Excel</button></div>' +
+    table([{ h: 'Date', k: 'day' }, { h: 'Employee', k: 'employee' }, { h: 'Distributor meeting', k: 'meeting' }, { h: 'Primary order', k: 'primary' },
+      { h: 'Shops visited', k: 'visited', num: true }, { h: 'Productive', k: 'productive', num: true }, { h: 'Non-productive', k: 'non_productive', num: true },
+      { h: 'Units booked', k: 'units', num: true, f: qty }, { h: 'Visit area', k: 'area' }, { h: 'Start', k: 'start' }, { h: 'End', k: 'end' }, { h: 'Photos', k: 'photos', num: true }], d.rows) +
+    '<p class="note">Morning session (5.2) and end-of-day market visit summary (5.3). Shops visited / productive / units are calculated from the data; the visit area is typed by the employee at sign-out.</p>';
+}
+async function corrections(out) {
+  const rows = await api('/admin/corrections?status=pending');
+  out.innerHTML = '<p class="note">Employees cannot edit attendance. They send a request; a supervisor (own team) or admin approves it and the decision is audited.</p>' +
+    table([{ h: 'Requested', k: 'requested' }, { h: 'Employee', k: 'employee' }, { h: 'For date', k: 'day' }, { h: 'Reason', k: 'reason', wrap: true },
+      { h: '', html: (r) => '<button class="btn small" onclick="decide(' + r.id + ',\'approved\')">Approve</button> <button class="btn alt small" onclick="decide(' + r.id + ',\'rejected\')">Reject</button>' }], rows);
+}
+async function decide(id, decision) {
+  const note = (await askText(decision === 'approved' ? 'Optional note for the record:' : 'Reason for rejecting:')) || '';
+  try { await api('/admin/corrections/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision, note }) }); go('corrections'); } catch (e) { toast(friendly(e), true); }
+}
+async function master(out) {
+  const [shops, skus] = await Promise.all([api('/admin/shops'), api('/admin/skus')]);
+  window._shops = shops; // names are looked up by id - never written into an onclick handler
+  const shopRows = shops.map((s) => '<tr><td>' + esc(s.shop_code) + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.mobile_no) + '</td><td>' + esc(s.area_town) + '</td><td>' + esc(s.address) + '</td><td>' + esc(s.onboarded_by) + '</td><td>' + tag(s.status === 'active' ? 'synced' : 'error', s.status) + '</td>' +
+    '<td><button class="btn alt small" onclick="editShop(' + Number(s.id) + ')">Edit</button> <button class="btn alt small" onclick="toggleShop(' + s.id + ',\'' + s.status + '\')">' + (s.status === 'active' ? 'Deactivate' : 'Activate') + '</button></td></tr>').join('');
+  out.innerHTML = '<h3>Shops (added from the app)</h3><div class="box"><table><thead><tr><th>Code</th><th>Name</th><th>Mobile</th><th>Area</th><th>Address</th><th>Added by</th><th>Status</th><th></th></tr></thead><tbody>' +
+    (shopRows || '<tr><td colspan="8">No shops added yet.</td></tr>') + '</tbody></table></div>' +
+    '<h3>SKUs (synced from SAP)</h3><div style="margin-bottom:10px"><button class="btn" onclick="syncNow(this)">Sync from SAP now</button></div>' +
+    table([{ h: 'Item code', k: 'item_code' }, { h: 'Name', k: 'item_name' }, { h: 'Price', k: 'price', num: true, f: money }, { h: 'Weight (KG)', k: 'unit_weight', num: true, f: qty },
+      { h: 'UoM', k: 'uom' }, { h: 'Last synced', k: 'last_synced' }], skus) + '<p class="note">SKUs come from SAP and are read-only here - change them in SAP and sync.</p>';
+}
+async function toggleShop(id, st) { try { await api('/admin/shops/' + id, { method: 'PATCH', body: JSON.stringify({ status: st === 'active' ? 'inactive' : 'active' }) }); go('master'); } catch (e) { toast(friendly(e), true); } }
+async function editShop(id) {
+  const cur = (window._shops || []).find((x) => x.id === id);
+  const n = await askText('Shop name:', cur ? cur.name : ''); if (n === null) return;
+  const m = await askText('Mobile number (leave empty to keep):', ''); const body = { name: n }; if (m) body.mobile_no = m;
+  try { await api('/admin/shops/' + id, { method: 'PATCH', body: JSON.stringify(body) }); go('master'); } catch (e) { toast(friendly(e), true); }
+}
+async function syncNow(btn) {
+  btn.disabled = true; btn.textContent = 'Syncing...';
+  try { const r = await api('/admin/sync/master-data', { method: 'POST' }); toast('Synced: ' + r.customers + ' customers, ' + r.items + ' items, ' + r.discounts + ' discounts'); go('master'); }
+  catch (e) { toast(friendly(e), true); btn.disabled = false; btn.textContent = 'Sync from SAP now'; }
+}
+const SETTING_LABELS = { checkin_start: 'Check-in window starts (HH:MM)', checkin_end: 'Check-in window ends (HH:MM)', capture_noon: 'Midday capture time (HH:MM)',
+  capture_evening: 'Afternoon capture time (HH:MM)', min_market_photos: 'Minimum market photos per day', enforce_market_photos: 'Block sign-out without the minimum photos (true / false)',
+  checkin_window_enforce: 'Check-in window (flag = mark early/late, off = ignore)', rate_per_km: 'Travel rate per KM (Rs)' };
+async function settings(out) {
+  const list = await api('/admin/settings');
+  const rows = list.filter((x) => x.key !== 'achieved_source').map((x) => '<tr><td>' + esc(SETTING_LABELS[x.key] || x.key) + '</td><td><input id="set_' + x.key + '" value="' + esc(x.value) + '" style="width:130px"></td>' +
+    '<td><button class="btn small" onclick="saveSetting(\'' + x.key + '\')">Save</button></td></tr>').join('');
+  out.innerHTML = '<div class="box"><table><thead><tr><th>Setting</th><th>Value</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<h3>SAP bridge</h3><div style="margin-bottom:10px"><button class="btn alt" onclick="sapStatus()">Check SAP connection</button> <span id="sapst" class="note"></span></div>' +
+    '<p class="note">The bridge address and its secret key are server settings (environment variables) and are deliberately not editable here. Every change on this page is written to the audit log.</p>';
+}
+async function saveSetting(k) {
+  try { await api('/admin/settings', { method: 'PATCH', body: JSON.stringify({ key: k, value: $('set_' + k).value }) }); toast('Saved'); } catch (e) { toast(friendly(e), true); }
+}
+async function sapStatus() {
+  $('sapst').textContent = 'Checking...';
+  try { const r = await api('/admin/sap-status'); $('sapst').textContent = r.reachable ? (r.sap_connected ? 'Bridge reachable, connected to SAP' : 'Bridge reachable, but NOT connected to SAP') : 'Bridge NOT reachable: ' + r.error; }
+  catch (e) { $('sapst').textContent = friendly(e); }
+}
+
+async function deliverOrder(id) {
+  if (!(await askConfirm('Create the SAP Delivery for this order? This takes the stock out of the SAP warehouse and cannot be undone from here.'))) return;
+  try {
+    const r = await api('/admin/orders/' + Number(id) + '/deliver', { method: 'POST', body: '{}' });
+    toast('Delivery created in SAP' + (r.delivery_no ? ' (no. ' + Number(r.delivery_no) + ')' : '') + '. Stock will refresh shortly.');
+    await go('orders');
+  } catch (e) { toast(friendly(e), true); }
+}
+async function orders(out) {
+  const d = await api('/admin/orders?' + qs());
+  out.innerHTML = '<div style="margin-bottom:10px"><button class="btn alt" onclick="download(\'orders\')">Export Excel</button></div>' +
+    table([{ h: 'Date', k: 'order_date' }, { h: 'SFA No', k: 'sfa_no' }, { h: 'Employee', k: 'employee' }, { h: 'Shop', k: 'shop' }, { h: 'Location', k: 'location', wrap: true },
+      { h: 'SKUs', k: 'skus', wrap: true }, { h: 'Qty', k: 'qty', num: true, f: qty }, { h: 'Weight (KG)', k: 'weight_kg', num: true, f: qty },
+      { h: 'Value', k: 'value', num: true, f: money }, { h: 'SAP', html: (r) => tag(r.sync_status) }, { h: 'Discount', html: (r) => r.manual_discount ? '<span class="tag out_of_range">Typed by employee</span>' : '' },
+      { h: 'Delivery', html: (r) => r.delivery_status === 'delivered' ? '<span class="tag present">Delivered' + (r.sap_delivery_doc_num ? ' #' + Number(r.sap_delivery_doc_num) : '') + '</span>'
+        : (r.sync_status === 'synced' ? '<button class="btn alt small" onclick="deliverOrder(' + Number(r.id) + ')">Mark delivered</button>' : '') }], d.rows,
+      { qty: d.totals.qty, weight_kg: d.totals.weight_kg, value: d.totals.value }) +
+    '<p class="note">' + d.totals.orders + ' orders. Shop mobile number is not captured by the app yet.</p>';
+}
+async function visits(out) {
+  const d = await api('/admin/visit-summary?' + qs());
+  const t = d.totals;
+  out.innerHTML = '<div style="margin-bottom:10px"><button class="btn alt" onclick="download(\'visit-summary\')">Export Excel</button></div>' +
+    '<div class="cards"><div class="card"><div class="n">' + t.visited + '</div><div class="l">Shops visited</div></div><div class="card"><div class="n">' + t.productive +
+    '</div><div class="l">Productive</div></div><div class="card"><div class="n">' + t.non_productive + '</div><div class="l">Non-productive</div></div></div>' +
+    table([{ h: 'Date', k: 'day' }, { h: 'Employee', k: 'employee' }, { h: 'Shops visited', k: 'visited', num: true }, { h: 'Productive', k: 'productive', num: true },
+      { h: 'Non-productive', k: 'non_productive', num: true }], d.rows) +
+    '<p class="note">Visits are counted from check-ins matched to a shop plus shops that received an order that day. Full visit tracking arrives with the route plan.</p>';
+}
+async function sync(out) {
+  const d = await api('/admin/sync-health');
+  const c = (n, l) => '<div class="card"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>';
+  let h = '<h3>Orders to SAP</h3><div class="cards">' + c(d.orders.synced, 'Synced') + c(d.orders.pending, 'Pending') + c(d.orders.error, 'Failed') + '</div>' +
+    '<h3>Time sheets to SAP</h3><div class="cards">' + c(d.timesheets.synced, 'Synced') + c(d.timesheets.pending, 'Pending') + c(d.timesheets.failed, 'Failed') + '</div>' +
+    '<h3>Failed orders</h3>' + table([{ h: 'Date', k: 'order_date' }, { h: 'Employee', k: 'employee' }, { h: 'Shop', k: 'shop' }, { h: 'Value', k: 'value', num: true, f: money },
+      ...(d.can_retry ? [{ h: 'Error', k: 'sync_error', wrap: true }, { h: '', html: (r) => '<button class="btn small" onclick="retry(' + r.id + ')">Retry</button>' }] : [])], d.failed_orders);
+  if (d.can_retry) {
+    h += '<h3>Failed time sheets</h3>' + table([{ h: 'Day', k: 'day' }, { h: 'Employee', k: 'employee' }, { h: 'Error', k: 'error', wrap: true }], d.failed_timesheets || []);
+    h += '<h3>Recent sync log</h3>' + table([{ h: 'When', k: 'ran_at' }, { h: 'Type', k: 'sync_type' }, { h: 'Status', html: (r) => tag(r.status === 'success' ? 'synced' : 'error') },
+      { h: 'Records', k: 'records_processed', num: true }, { h: 'Message', k: 'message', wrap: true }], d.recent_log || []);
+  } else h += '<p class="note">Supervisors see counts and their team\'s failed orders. Error details and retry are admin-only.</p>';
+  out.innerHTML = h;
+}
+async function retry(id) {
+  if (!(await askConfirm('Send this order back to the SAP sync queue?'))) return;
+  try { await api('/admin/orders/' + id + '/retry', { method: 'POST' }); go('sync'); } catch (e) { toast(friendly(e), true); }
+}
+async function users(out) {
+  const list = await api('/admin/users');
+  const mgrs = list.filter((u) => u.role === 'supervisor' || u.role === 'admin').map((u) => u.name);
+  const rows = list.map((u) => '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.email) + '</td><td>' + esc(u.sap_code) + '</td><td>' + esc(u.designation) + '</td>' +
+    '<td>' + (u.is_active ? tag('synced', 'active') : tag('error', 'inactive')) + '</td>' +
+    '<td><select onchange="setRole(' + u.id + ', this.value)">' + ['salesman', 'supervisor', 'admin'].map((r) => '<option' + (r === u.role ? ' selected' : '') + '>' + r + '</option>').join('') + '</select></td>' +
+    '<td><select onchange="setManager(' + u.id + ', this.value)"><option value="">-</option>' + mgrs.map((m) => '<option' + (m === u.manager_name ? ' selected' : '') + '>' + esc(m) + '</option>').join('') + '</select></td></tr>').join('');
+  out.innerHTML = '<div class="box"><table><thead><tr><th>Name</th><th>Email</th><th>SAP code</th><th>Designation</th><th>Status</th><th>Role</th><th>Reports to (team)</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<p class="note">A supervisor sees the employees whose "Reports to" is that supervisor. Changes are written to the audit log. You cannot change your own role.</p>';
+}
+async function setRole(id, role) { try { await api('/admin/users/' + id + '/role', { method: 'PATCH', body: JSON.stringify({ role }) }); } catch (e) { toast(friendly(e), true); go('users'); } }
+async function setManager(id, m) { try { await api('/admin/users/' + id + '/manager', { method: 'PATCH', body: JSON.stringify({ manager_name: m }) }); } catch (e) { toast(friendly(e), true); go('users'); } }
+async function auditLog(out) {
+  const rows = await api('/admin/audit');
+  out.innerHTML = table([{ h: 'When', k: 'at' }, { h: 'By', k: 'actor_name' }, { h: 'Action', k: 'action' }, { h: 'On', f: null, html: (r) => esc(r.entity + ' #' + r.entity_id) },
+    { h: 'Detail', wrap: true, html: (r) => esc(r.detail ? JSON.stringify(r.detail) : '') }], rows);
+}
+
+(async () => { if (token) await start(); else $('login').classList.remove('hide'); })();
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('login').classList.contains('hide')) doLogin(); });
+</script>
+</body>
+</html>

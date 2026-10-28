@@ -3,7 +3,7 @@ const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const attendanceReport = require('../services/attendanceReport');
 const ordersReport = require('../services/ordersReport');
-const expenseReport = require('../services/expenseReport');
+const expenseReport = require('../services/expenseSheetReport'); // client's Excel-style expense sheet format
 
 const router = express.Router();
 
