@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 const pool = require('../db');
 
 const { SAP_BRIDGE_URL, SAP_BRIDGE_API_KEY } = process.env;
@@ -10,10 +11,19 @@ if (!SAP_BRIDGE_API_KEY) {
   );
 }
 
+// Render uses Tailscale to connect to your SAP server.
+// The Tailscale sidecar provides a SOCKS5 proxy on localhost:1055.
+// We only use this proxy in production (Render), not on your local PC.
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.ALL_PROXY;
+const proxyAgent = isProduction ? new SocksProxyAgent('socks5://localhost:1055') : undefined;
+
 const bridge = axios.create({
   baseURL: SAP_BRIDGE_URL,
   timeout: 20000,
   headers: { 'X-API-Key': SAP_BRIDGE_API_KEY || '' },
+  httpAgent: proxyAgent,
+  httpsAgent: proxyAgent,
+  proxy: false // disables default proxy logic so it uses the agent above
 });
 
 bridge.interceptors.response.use(
@@ -59,7 +69,6 @@ async function buildSalesOrderPayload(order) {
 
   if (customer.length === 0) throw new Error(`No SAP CardCode mapped for customer_id ${order.customer_id}`);
 
-  // Deliver from the customer's own warehouse; without it SAP would use the item's default warehouse.
   const whs = customer[0].default_warehouse && String(customer[0].default_warehouse).trim() !== ''
     ? String(customer[0].default_warehouse).trim() : null;
 
@@ -91,8 +100,6 @@ async function pullTimeSheetHistory(employeeId, from, to) {
   const res = await bridge.get('/timesheet', { params: { employeeId, from, to } });
   return res.data;
 }
-
-// ---------- PUSH TIME SHEETS ----------
 
 const COMPANY_TZ = process.env.COMPANY_TZ || 'Asia/Karachi';
 
@@ -187,8 +194,6 @@ async function pushPendingTimeSheets() {
   return { successCount, errorCount, total: pending.length };
 }
 
-// ---------- PUSH ORDERS ----------
-
 async function pushPendingOrders() {
   const { rows: pending } = await pool.query(
     `SELECT * FROM orders WHERE sync_status = 'pending' ORDER BY order_date ASC LIMIT 20`
@@ -227,8 +232,6 @@ async function pushPendingOrders() {
   }
   return { successCount, errorCount, total: pending.length };
 }
-
-// ---------- PULL MASTER DATA ----------
 
 async function pullCustomers() {
   const res = await bridge.get('/customers');
@@ -327,8 +330,6 @@ async function pullDiscounts() {
   return rows.length;
 }
 
-// ---------- SAP USERS (login accounts) ----------
-
 async function upsertSapUser(u) {
   const code = String(u.UserCode || '').trim();
   if (!code) return null;
@@ -340,19 +341,15 @@ async function upsertSapUser(u) {
   const fullName = `${u.FirstName || ''} ${u.LastName || ''}`.trim() || u.UserName || code;
   const slp = Number(u.SalesPrson) > 0 ? String(u.SalesPrson) : null;
   
-  // CLAUDE'S FIX: Reverted to null. We don't invent an Employee ID from UserID.
   const empId = hasEmployee ? Number(u.EmpID) : null; 
 
-  // 1) already linked by SAP user code
   let { rows } = await pool.query('SELECT id FROM users WHERE sap_user_code = $1', [code]);
-  // 2) adopt an existing app account (keeps its order/attendance history) by Sales Employee code
   if (rows.length === 0 && slp) {
     ({ rows } = await pool.query(
       'SELECT id FROM users WHERE sap_user_code IS NULL AND sap_sales_employee_code = $1 ORDER BY id LIMIT 1', [slp]));
   }
 
   if (rows.length > 0) {
-    // CLAUDE'S FIX: Added COALESCE to $3 so it doesn't overwrite manual database links with null.
     const { rows: out } = await pool.query(
       `UPDATE users SET
          sap_user_code = $1, sap_user_id = $2, sap_employee_id = COALESCE($3, sap_employee_id), name = $4,
