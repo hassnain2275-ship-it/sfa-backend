@@ -1,5 +1,4 @@
 const axios = require('axios');
-const { SocksProxyAgent } = require('socks-proxy-agent');
 const pool = require('../db');
 
 const { SAP_BRIDGE_URL, SAP_BRIDGE_API_KEY } = process.env;
@@ -11,19 +10,10 @@ if (!SAP_BRIDGE_API_KEY) {
   );
 }
 
-// Render uses Tailscale to connect to your SAP server.
-// The Tailscale sidecar provides a SOCKS5 proxy on localhost:1055.
-// We only use this proxy in production (Render), not on your local PC.
-const isProduction = process.env.NODE_ENV === 'production' || !!process.env.ALL_PROXY;
-const proxyAgent = isProduction ? new SocksProxyAgent('socks5://localhost:1055') : undefined;
-
 const bridge = axios.create({
   baseURL: SAP_BRIDGE_URL,
-  timeout: 20000,
+  timeout: 60000, // 60 seconds to allow for slow Render free tier wakeups
   headers: { 'X-API-Key': SAP_BRIDGE_API_KEY || '' },
-  httpAgent: proxyAgent,
-  httpsAgent: proxyAgent,
-  proxy: false // disables default proxy logic so it uses the agent above
 });
 
 bridge.interceptors.response.use(
@@ -100,6 +90,8 @@ async function pullTimeSheetHistory(employeeId, from, to) {
   const res = await bridge.get('/timesheet', { params: { employeeId, from, to } });
   return res.data;
 }
+
+// ---------- PUSH TIME SHEETS ----------
 
 const COMPANY_TZ = process.env.COMPANY_TZ || 'Asia/Karachi';
 
@@ -194,6 +186,8 @@ async function pushPendingTimeSheets() {
   return { successCount, errorCount, total: pending.length };
 }
 
+// ---------- PUSH ORDERS ----------
+
 async function pushPendingOrders() {
   const { rows: pending } = await pool.query(
     `SELECT * FROM orders WHERE sync_status = 'pending' ORDER BY order_date ASC LIMIT 20`
@@ -232,6 +226,8 @@ async function pushPendingOrders() {
   }
   return { successCount, errorCount, total: pending.length };
 }
+
+// ---------- PULL MASTER DATA ----------
 
 async function pullCustomers() {
   const res = await bridge.get('/customers');
@@ -329,6 +325,8 @@ async function pullDiscounts() {
   await logSync('discounts_down', 'success', rows.length, `${rows.length} customer discounts synced`);
   return rows.length;
 }
+
+// ---------- SAP USERS (login accounts) ----------
 
 async function upsertSapUser(u) {
   const code = String(u.UserCode || '').trim();
