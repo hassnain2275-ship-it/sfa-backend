@@ -722,4 +722,23 @@ router.get('/export/visit-summary', wrap(async (req, res) => {
   ], d.rows);
 }));
 
+// Allow admin to set a password for a user directly from the dashboard
+router.post('/users/:id/password', requireRole('admin'), wrap(async (req, res) => {
+  const { password } = req.body;
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+  const bcrypt = require('bcrypt');
+  const hash = await bcrypt.hash(password, 10);
+  
+  const { rowCount } = await pool.query(
+    'UPDATE users SET password_hash = $1 WHERE id = $2',
+    [hash, req.params.id]
+  );
+  
+  if (!rowCount) return res.status(404).json({ error: 'User not found' });
+  await audit(req, 'user_password_change', 'user', req.params.id, {});
+  res.json({ ok: true });
+}));
+
 module.exports = router;
