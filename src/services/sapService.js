@@ -334,7 +334,7 @@ async function upsertSapUser(u) {
 
   const hasEmployee = Number(u.EmpID) > 0;
   const isSuper = u.SuperUser === 'Y';
-  const active = u.Locked !== 'Y';
+  const active = u.Locked !== 'Y' && (hasEmployee ? u.EmpActive !== 'N' : isSuper);
   const derivedRole = isSuper ? 'admin' : (Number(u.ReportsCount) > 0 ? 'supervisor' : 'salesman');
   const fullName = `${u.FirstName || ''} ${u.LastName || ''}`.trim() || u.UserName || code;
   const slp = Number(u.SalesPrson) > 0 ? String(u.SalesPrson) : null;
