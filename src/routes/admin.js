@@ -7,6 +7,7 @@
 //   salesman   - no access (403)
 const express = require('express');
 const ExcelJS = require('exceljs');
+const bcrypt = require('bcrypt');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const rules = require('../services/dailyRules');
@@ -449,6 +450,20 @@ router.patch('/users/:id/manager', requireRole('admin'), wrap(async (req, res) =
   res.json({ ok: true });
 }));
 
+// Set / reset the app password of an employee (AUTH_MODE=synced). Admin only.
+// The password is stored as a bcrypt hash; it is never written to the audit log or the console.
+router.post('/users/:id/password', requireRole('admin'), wrap(async (req, res) => {
+  const pw = String(req.body.password || '');
+  if (pw.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  if (Buffer.byteLength(pw, 'utf8') > 72) return res.status(400).json({ error: 'Password is too long (72 characters at most).' });
+  const id = Number(req.params.id);
+  const u = (await pool.query('SELECT id, name, sap_user_code FROM users WHERE id=$1', [id])).rows[0];
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await bcrypt.hash(pw, 10), id]);
+  await audit(req, 'password_set', 'user', id, { for: u.sap_user_code || u.name });
+  res.json({ ok: true });
+}));
+
 router.get('/audit', requireRole('admin'), wrap(async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -720,25 +735,6 @@ router.get('/export/visit-summary', wrap(async (req, res) => {
     { header: 'Date', key: 'day' }, { header: 'Employee', key: 'employee', width: 24 },
     { header: 'Shops Visited', key: 'visited' }, { header: 'Productive', key: 'productive' }, { header: 'Non-productive', key: 'non_productive' },
   ], d.rows);
-}));
-
-// Allow admin to set a password for a user directly from the dashboard
-router.post('/users/:id/password', requireRole('admin'), wrap(async (req, res) => {
-  const { password } = req.body;
-  if (!password || password.length < 6) {
-    return res.status(400).json({ error: 'Password must be at least 6 characters' });
-  }
-  const bcrypt = require('bcrypt');
-  const hash = await bcrypt.hash(password, 10);
-  
-  const { rowCount } = await pool.query(
-    'UPDATE users SET password_hash = $1 WHERE id = $2',
-    [hash, req.params.id]
-  );
-  
-  if (!rowCount) return res.status(404).json({ error: 'User not found' });
-  await audit(req, 'user_password_change', 'user', req.params.id, {});
-  res.json({ ok: true });
 }));
 
 module.exports = router;

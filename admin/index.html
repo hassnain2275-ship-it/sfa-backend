@@ -1,4 +1,6 @@
-<html lang="en"><head>
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SFA Admin Dashboard</title>
@@ -8,6 +10,7 @@
   @font-face { font-family:"IBM Plex Sans"; src:url(fonts/IBMPlexSans-SemiBold.ttf) format("truetype"); font-weight:600; font-display:swap; }
   @font-face { font-family:"IBM Plex Sans"; src:url(fonts/IBMPlexSans-Bold.ttf) format("truetype"); font-weight:700; font-display:swap; }
 
+  /* Same tokens as the mobile app (flutter_app/lib/theme/app_theme.dart) */
   :root { --bg:#F3F4F0; --card:#ffffff; --ink:#17211E; --muted:#66726C; --line:#DDE2DB; --line-strong:#B9C2BB;
           --brand:#0F4C42; --on-brand:#ffffff; --side:#0A3730; --accent:#F0B429;
           --ok:#2F7D52; --warn:#9A6410; --bad:#B8432F; --soft:#E1ECE8; }
@@ -17,6 +20,7 @@
   body { margin:0; font:14px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
   :focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
 
+  /* Shell: brand + header on top, navigation down the left, content right */
   #app { display:grid; grid-template-columns:236px minmax(0,1fr); grid-template-rows:60px 1fr; grid-template-areas:"brand head" "nav main"; min-height:100vh; }
   .brand { grid-area:brand; display:flex; align-items:center; gap:10px; padding:0 20px; background:var(--side); color:#fff; font-weight:600; font-size:17px; position:sticky; top:0; z-index:6; }
   .mark { width:30px; height:30px; border-radius:9px; background:var(--accent); display:inline-flex; align-items:center; justify-content:center; }
@@ -68,6 +72,7 @@
   .grid input { width:100%; min-width:110px; } .formrow { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; } .formrow > div { min-width:150px; }
   .hide { display:none !important; }
 
+
   #toasts { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:50; max-width:min(380px,calc(100vw - 40px)); }
   .toast { background:var(--side); color:#fff; padding:11px 16px; border-radius:10px; font-size:13.5px; box-shadow:0 6px 24px rgba(0,0,0,.22); }
   .toast.bad { background:var(--bad); }
@@ -92,8 +97,8 @@
 </head>
 <body>
 
-<section id="login" class="">
-  <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#17211E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"></path><path d="M12 12 6.5 6.5"></path><path d="M12 12l5.5-5.5"></path><path d="M6.5 11V6.5H11"></path><path d="M17.5 11V6.5H13"></path></svg></span>
+<section id="login" class="hide">
+  <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#17211E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M12 12 6.5 6.5"/><path d="M12 12l5.5-5.5"/><path d="M6.5 11V6.5H11"/><path d="M17.5 11V6.5H13"/></svg></span>
   <h2 style="margin-top:0">Sign in to the dashboard</h2>
   <label>Email / User Code</label><input id="u" autocomplete="username" autocapitalize="none">
   <label>Password</label><input id="p" type="password" autocomplete="current-password">
@@ -103,7 +108,7 @@
 </section>
 
 <div id="app" class="hide">
-  <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#17211E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"></path><path d="M12 12 6.5 6.5"></path><path d="M12 12l5.5-5.5"></path><path d="M6.5 11V6.5H11"></path><path d="M17.5 11V6.5H13"></path></svg></span><span>SFA</span></div>
+  <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#17211E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M12 12 6.5 6.5"/><path d="M12 12l5.5-5.5"/><path d="M6.5 11V6.5H11"/><path d="M17.5 11V6.5H13"/></svg></span><span>SFA</span></div>
   <header>
     <h1>Admin dashboard</h1>
     <span class="who" id="who"></span>
@@ -129,8 +134,9 @@ const money = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDig
 const qty = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
 
+
 function friendly(e) {
-  console.error(e);
+  console.error(e); // technical detail goes to the browser console only
   const m = (e && e.message) ? String(e.message) : '';
   if (!m || /failed to fetch|networkerror|load failed|network request failed/i.test(m)) return 'Cannot reach the server. Check your connection and try again.';
   return m;
@@ -246,6 +252,8 @@ async function go(k) {
   } catch (e) { out.innerHTML = '<div class="msg bad">' + esc(friendly(e)) + '</div>'; }
 }
 
+
+// ---------------- SAP Reports (read live from SAP) ----------------
 const SR = {
   'region-sales': { title: 'Invoice Wise Region Sales', kind: 'Invoices', note: 'Provisional. Built from the client\'s saved query; compare the totals with SAP\'s own report before relying on it.', filters: ['item', 'region', 'town', 'area', 'customer'] },
   'monthly-sales': { title: 'Monthly sales', kind: 'Sales orders', note: 'Sales orders in SAP, grouped by month and customer. Amounts are before tax.', filters: ['item', 'customer'] },
@@ -321,10 +329,9 @@ async function attendance(out) {
     '<p class="note">Absent = no check-in for that day (ATT-02). Compliance = valid captures out of the captures due (check-in, 12:00, 16:00); mock-GPS records are left out until reviewed (ATT-06).</p>' +
     '<h3>Mock-GPS review queue</h3>' + (flags.length ? table([{ h: 'Date', k: 'day' }, { h: 'Time', k: 'time' }, { h: 'Employee', k: 'employee' }, { h: 'Record', k: 'label' },
       { h: 'Location', html: (r) => esc(Number(r.latitude).toFixed(5) + ', ' + Number(r.longitude).toFixed(5)) },
-      { h: '', html: (r) => '<button class=\"btn small\" onclick=\"reviewFlag(\\\'' + r.kind + '\\\',' + r.id + ',\\\'accepted\\\')\">Accept</button> <button class=\"btn alt small\" onclick=\"reviewFlag(\\\'' + r.kind + '\\\',' + r.id + ',\\\'rejected\\\')\">Reject</button>' }], flags)
-      : '<div class=\"box\"><div style=\"padding:16px;color:var(--muted)\">Nothing waiting for review.</div></div>');
+      { h: '', html: (r) => '<button class="btn small" onclick="reviewFlag(\'' + r.kind + '\',' + r.id + ',\'accepted\')">Accept</button> <button class="btn alt small" onclick="reviewFlag(\'' + r.kind + '\',' + r.id + ',\'rejected\')">Reject</button>' }], flags)
+      : '<div class="box"><div style="padding:16px;color:var(--muted)">Nothing waiting for review.</div></div>');
 }
-
 async function reviewFlag(kind, id, decision) {
   try { await api('/admin/mock-flags/' + kind + '/' + id + '/review', { method: 'POST', body: JSON.stringify({ decision }) }); go('attendance'); } catch (e) { toast(friendly(e), true); }
 }
@@ -351,6 +358,7 @@ function monthRange() {
 }
 const num0 = (v) => (v === null || v === undefined ? '-' : qty(v));
 
+// ---------------- Plans: list + grid form ----------------
 async function plans(out) {
   const list = await api('/plans');
   out.innerHTML = '<div style="margin-bottom:10px"><button class="btn" onclick="planForm()">+ New plan</button></div>' +
@@ -430,6 +438,7 @@ async function cancelPlan(id) {
   try { await api('/plans/' + id + '/cancel', { method: 'POST' }); go('plans'); } catch (e) { toast(friendly(e), true); }
 }
 
+// ---------------- Plan vs Achieved report: Employee + From + To (default = current month) ----------------
 function planQs() {
   const emp = $('pr_emp') ? $('pr_emp').value : ''; const from = $('pr_from').value, to = $('pr_to').value;
   const p = new URLSearchParams(); if (emp) p.set('employee_id', emp); if (from) p.set('from', from); if (to) p.set('to', to); return p.toString();
@@ -478,7 +487,7 @@ async function decide(id, decision) {
 }
 async function master(out) {
   const [shops, skus] = await Promise.all([api('/admin/shops'), api('/admin/skus')]);
-  window._shops = shops;
+  window._shops = shops; // names are looked up by id - never written into an onclick handler
   const shopRows = shops.map((s) => '<tr><td>' + esc(s.shop_code) + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.mobile_no) + '</td><td>' + esc(s.area_town) + '</td><td>' + esc(s.address) + '</td><td>' + esc(s.onboarded_by) + '</td><td>' + tag(s.status === 'active' ? 'synced' : 'error', s.status) + '</td>' +
     '<td><button class="btn alt small" onclick="editShop(' + Number(s.id) + ')">Edit</button> <button class="btn alt small" onclick="toggleShop(' + s.id + ',\'' + s.status + '\')">' + (s.status === 'active' ? 'Deactivate' : 'Activate') + '</button></td></tr>').join('');
   out.innerHTML = '<h3>Shops (added from the app)</h3><div class="box"><table><thead><tr><th>Code</th><th>Name</th><th>Mobile</th><th>Area</th><th>Address</th><th>Added by</th><th>Status</th><th></th></tr></thead><tbody>' +
@@ -573,37 +582,26 @@ async function users(out) {
     '<td>' + (u.is_active ? tag('synced', 'active') : tag('error', 'inactive')) + '</td>' +
     '<td><select onchange="setRole(' + u.id + ', this.value)">' + ['salesman', 'supervisor', 'admin'].map((r) => '<option' + (r === u.role ? ' selected' : '') + '>' + r + '</option>').join('') + '</select></td>' +
     '<td><select onchange="setManager(' + u.id + ', this.value)"><option value="">-</option>' + mgrs.map((m) => '<option' + (m === u.manager_name ? ' selected' : '') + '>' + esc(m) + '</option>').join('') + '</select></td>' +
-    '<td><button class="btn small" onclick="setUserPassword(' + u.id + ')">Set Pass</button></td></tr>').join('');
-  out.innerHTML = '<div class="box"><table><thead><tr><th>Name</th><th>Email</th><th>SAP code</th><th>Designation</th><th>Status</th><th>Role</th><th>Reports to (team)</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    '<p class="note">A supervisor sees the employees whose \"Reports to\" is that supervisor. Changes are written to the audit log. You cannot change your own role.</p>';
+    '<td><button class="btn alt small" onclick="setPassword(' + u.id + ')">Set password</button></td></tr>').join('');
+  out.innerHTML = '<div class="box"><table><thead><tr><th>Name</th><th>Email</th><th>SAP code</th><th>Designation</th><th>Status</th><th>Role</th><th>Reports to (team)</th><th>App password</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<p class="note">New SAP users appear here within a few minutes. Press "Set password" to give an employee the password for the app (the app never uses a SAP license). A supervisor sees the employees whose "Reports to" is that supervisor. Changes are written to the audit log. You cannot change your own role.</p>';
 }
-async function setRole(id, role) {
-  try { await api('/admin/users/' + id + '/role', { method: 'PATCH', body: JSON.stringify({ role }) }); go('users'); }
-  catch (e) { toast(friendly(e), true); go('users'); }
+async function setRole(id, role) { try { await api('/admin/users/' + id + '/role', { method: 'PATCH', body: JSON.stringify({ role }) }); } catch (e) { toast(friendly(e), true); go('users'); } }
+async function setPassword(id) {
+  const pw = await askText('Type the app password for this employee (at least 6 characters):', '');
+  if (pw === null || pw === undefined || pw === '') return;
+  try { await api('/admin/users/' + id + '/password', { method: 'POST', body: JSON.stringify({ password: pw }) }); toast('Password saved. Tell the employee.'); }
+  catch (e) { toast(friendly(e), true); }
 }
-async function setManager(id, m) {
-  try { await api('/admin/users/' + id + '/manager', { method: 'PATCH', body: JSON.stringify({ manager_name: m }) }); go('users'); }
-  catch (e) { toast(friendly(e), true); go('users'); }
-}
-async function setUserPassword(userId) {
-  const newPassword = await askText('Enter a new password for this user (min 6 characters):', '');
-  if (newPassword === null || newPassword === '') return;
-  if (newPassword.length < 6) { toast('Password must be at least 6 characters.', true); return; }
-  try {
-    await api('/admin/users/' + userId + '/password', { method: 'POST', body: JSON.stringify({ password: newPassword }) });
-    toast('Password set successfully! The user can now log in.');
-  } catch (e) { toast(friendly(e), true); }
-}
+async function setManager(id, m) { try { await api('/admin/users/' + id + '/manager', { method: 'PATCH', body: JSON.stringify({ manager_name: m }) }); } catch (e) { toast(friendly(e), true); go('users'); } }
 async function auditLog(out) {
   const rows = await api('/admin/audit');
-  out.innerHTML = table([{ h: 'When', k: 'at' }, { h: 'By', k: 'actor_name' }, { h: 'Action', k: 'action' },
-    { h: 'On', f: null, html: (r) => esc(r.entity + ' #' + r.entity_id) },
+  out.innerHTML = table([{ h: 'When', k: 'at' }, { h: 'By', k: 'actor_name' }, { h: 'Action', k: 'action' }, { h: 'On', f: null, html: (r) => esc(r.entity + ' #' + r.entity_id) },
     { h: 'Detail', wrap: true, html: (r) => esc(r.detail ? JSON.stringify(r.detail) : '') }], rows);
 }
 
 (async () => { if (token) await start(); else $('login').classList.remove('hide'); })();
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('login').classList.contains('hide')) doLogin(); });
 </script>
-
-
-</body></html>
+</body>
+</html>

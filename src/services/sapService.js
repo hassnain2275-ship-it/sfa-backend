@@ -1,5 +1,6 @@
 const axios = require('axios');
 const pool = require('../db');
+const bcrypt = require('bcrypt');
 
 const { SAP_BRIDGE_URL, SAP_BRIDGE_API_KEY } = process.env;
 
@@ -334,7 +335,7 @@ async function upsertSapUser(u) {
 
   const hasEmployee = Number(u.EmpID) > 0;
   const isSuper = u.SuperUser === 'Y';
-  const active = u.Locked !== 'Y';
+  const active = u.Locked !== 'Y' && (hasEmployee ? u.EmpActive !== 'N' : isSuper);
   const derivedRole = isSuper ? 'admin' : (Number(u.ReportsCount) > 0 ? 'supervisor' : 'salesman');
   const fullName = `${u.FirstName || ''} ${u.LastName || ''}`.trim() || u.UserName || code;
   const slp = Number(u.SalesPrson) > 0 ? String(u.SalesPrson) : null;
@@ -361,11 +362,16 @@ async function upsertSapUser(u) {
   }
 
   const emailBase = (u.Email && String(u.Email).trim()) || `${code.toLowerCase()}@sap.local`;
+  // Optional: DEFAULT_USER_PASSWORD (backend env, used with AUTH_MODE=synced) is the starting password given to every
+  // BRAND-NEW synced user, so they can log in with no admin step. Existing users are never touched.
+  // Leave it unset to require "Set password" in the dashboard (nobody can log in until an admin gives them a password).
+  const startPw = String(process.env.DEFAULT_USER_PASSWORD || '');
+  const startHash = startPw.length >= 6 ? await bcrypt.hash(startPw, 10) : '!sap-managed';
   const insert = (email) => pool.query(
     `INSERT INTO users (name, email, password_hash, role, sap_user_code, sap_user_id, sap_employee_id,
                         sap_sales_employee_code, designation, is_active, sap_synced_at)
-     VALUES ($1,$2,'!sap-managed',$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING *`,
-    [fullName, email, derivedRole, code, u.UserID, empId, slp, u.JobTitle || null, active]
+     VALUES ($1,$2,$10,$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING *`,
+    [fullName, email, derivedRole, code, u.UserID, empId, slp, u.JobTitle || null, active, startHash]
   );
   try {
     return (await insert(emailBase)).rows[0];
