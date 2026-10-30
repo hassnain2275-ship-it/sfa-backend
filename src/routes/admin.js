@@ -660,6 +660,18 @@ router.post('/sync/master-data', requireRole('admin'), wrap(async (req, res) => 
   }
 }));
 
+// Pull the SAP users right now (new users, locks, Employee links) instead of waiting for the 5-minute sync.
+router.post('/sync/users', requireRole('admin'), wrap(async (req, res) => {
+  try {
+    const n = await require('../services/sapService').pullUsers();
+    await audit(req, 'users_sync', 'sap', 'now', { users: n });
+    res.json({ ok: true, users: n });
+  } catch (err) {
+    console.error('[user sync] manual run failed:', err.message);
+    res.status(502).json({ error: 'Could not reach SAP to sync users. Check that the SAP bridge is running and try again.' });
+  }
+}));
+
 // ---------- settings + SAP bridge status (admin only) ----------
 const SETTING_RULES = {
   checkin_start: (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v), checkin_end: (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v),

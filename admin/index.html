@@ -583,10 +583,15 @@ async function users(out) {
     '<td><select onchange="setRole(' + u.id + ', this.value)">' + ['salesman', 'supervisor', 'admin'].map((r) => '<option' + (r === u.role ? ' selected' : '') + '>' + r + '</option>').join('') + '</select></td>' +
     '<td><select onchange="setManager(' + u.id + ', this.value)"><option value="">-</option>' + mgrs.map((m) => '<option' + (m === u.manager_name ? ' selected' : '') + '>' + esc(m) + '</option>').join('') + '</select></td>' +
     '<td><button class="btn alt small" onclick="setPassword(' + u.id + ')">Set password</button></td></tr>').join('');
-  out.innerHTML = '<div class="box"><table><thead><tr><th>Name</th><th>Email</th><th>SAP code</th><th>Designation</th><th>Status</th><th>Role</th><th>Reports to (team)</th><th>App password</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+  out.innerHTML = '<div style="margin-bottom:10px"><button class="btn" onclick="syncUsersNow(this)">Sync users from SAP now</button></div><div class="box"><table><thead><tr><th>Name</th><th>Email</th><th>SAP code</th><th>Designation</th><th>Status</th><th>Role</th><th>Reports to (team)</th><th>App password</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<p class="note">New SAP users appear here within a few minutes. Press "Set password" to give an employee the password for the app (the app never uses a SAP license). A supervisor sees the employees whose "Reports to" is that supervisor. Changes are written to the audit log. You cannot change your own role.</p>';
 }
 async function setRole(id, role) { try { await api('/admin/users/' + id + '/role', { method: 'PATCH', body: JSON.stringify({ role }) }); } catch (e) { toast(friendly(e), true); go('users'); } }
+async function syncUsersNow(btn) {
+  btn.disabled = true; btn.textContent = 'Syncing...';
+  try { const r = await api('/admin/sync/users', { method: 'POST' }); toast(r.users + ' SAP users synced.'); go('users'); }
+  catch (e) { toast(friendly(e), true); btn.disabled = false; btn.textContent = 'Sync users from SAP now'; }
+}
 async function setPassword(id) {
   const pw = await askText('Type the app password for this employee (at least 6 characters):', '');
   if (pw === null || pw === undefined || pw === '') return;

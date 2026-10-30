@@ -90,9 +90,10 @@ function startSyncScheduler() {
       userSyncRunning = false;
     }
   };
-  // Only in SAP mode: in local mode the users table is managed by hand and must
+  // Only in SAP mode and synced mode: in local mode the users table is managed by hand and must
   // not be touched by a SAP sync.
-  if (String(process.env.AUTH_MODE || 'local').toLowerCase() === 'sap') {
+  const schedMode = String(process.env.AUTH_MODE || 'local').toLowerCase();
+  if (schedMode === 'sap' || schedMode === 'synced') {
     setInterval(runUserSync, userInterval);
     setTimeout(runUserSync, 10000); // once shortly after startup
   }

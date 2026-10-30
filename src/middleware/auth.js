@@ -37,8 +37,9 @@ async function requireAuth(req, res, next) {
     }
 
     // AUTH_MODE=local (default): original behaviour - a valid token is enough.
-    // The live is-the-account-still-active check only applies in SAP mode.
-    if (String(process.env.AUTH_MODE || 'local').toLowerCase() !== 'sap') {
+    // The live is-the-account-still-active check applies in SAP mode and in synced mode.
+    const authMode = String(process.env.AUTH_MODE || 'local').toLowerCase();
+    if (authMode !== 'sap' && authMode !== 'synced') {
       req.user = { id: payload.id, email: payload.email, role: payload.role };
       return next();
     }
