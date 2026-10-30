@@ -9,9 +9,14 @@ const router = express.Router();
 
 // AUTH_MODE (backend env var):
 //   local (DEFAULT) - the original login: e-mail + password stored in our own users table.
-//   sap             - login is verified against SAP (see sapLogin below).
+//   sap             - login is verified against SAP (see sapLogin below). Takes ONE SAP LICENSE PER LOGIN.
+//   synced          - NO SAP license for employees. Accounts (user code, name, role, sales-employee code)
+//                     come from the SAP user sync; the password is kept here (bcrypt) and checked here.
+//                     Only the bridge's own service user ever holds a SAP license.
 // Switching is just changing this variable and restarting Node - no code change.
-const isSapMode = () => String(process.env.AUTH_MODE || 'local').toLowerCase() === 'sap';
+const authMode = () => String(process.env.AUTH_MODE || 'local').toLowerCase();
+const isSapMode = () => authMode() === 'sap';
+const isSyncedMode = () => authMode() === 'synced';
 
 // When the SAP bridge is unreachable (server off, ngrok down), allow people who
 // have logged in successfully before to get back in with the same password.
@@ -125,6 +130,50 @@ async function sapLogin(req, res) {
   }
 }
 
+// ---------- SYNCED LOGIN (AUTH_MODE=synced): SAP-created accounts, password checked here, no SAP license ----------
+// username = SAP user code (or the e-mail kept on the account). The account must already exist
+// (the SAP user sync creates it) AND an administrator must have set its password
+// (node scripts/set_user_password.js <user code> <password>).
+// Real reasons are logged in this console only; the phone always gets the same safe message.
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10); // keeps timing similar for unknown users
+async function syncedLogin(req, res) {
+  try {
+    const username = String(req.body.username || req.body.email || '').trim();
+    const password = String(req.body.password || '');
+    if (!username || !password) return res.status(400).json({ error: 'User code and password are required' });
+    const lk = failKey(req, username);
+    const waitMs = blockedForMs(lk);
+    if (waitMs) return tooMany(res, waitMs);
+
+    const { rows } = await pool.query(
+      'SELECT * FROM users WHERE LOWER(sap_user_code) = LOWER($1) OR LOWER(email) = LOWER($1) ORDER BY (LOWER(sap_user_code) = LOWER($1)) DESC LIMIT 1',
+      [username]);
+    const user = rows[0];
+    const hasPassword = !!user && !!user.password_hash && user.password_hash !== '!sap-managed';
+    const match = await bcrypt.compare(password, hasPassword ? user.password_hash : DUMMY_HASH);
+
+    if (!user || !hasPassword || !match) {
+      recordFailure(lk);
+      if (user && !hasPassword) console.warn('Login refused for ' + username + ': no password set yet (run scripts/set_user_password.js)');
+      else if (!user) console.warn('Login refused: no account for ' + username + ' (not synced from SAP yet?)');
+      return res.status(401).json({ error: 'Invalid user code or password' });
+    }
+    if (!user.is_active) {
+      console.warn('Login refused for ' + username + ': account inactive (locked in SAP, or no Employee linked to the SAP user)');
+      return res.status(403).json({
+        error: 'Your account is not active for the SFA app. Contact your administrator.',
+        code: 'ACCOUNT_DISABLED',
+      });
+    }
+    clearFailures(lk);
+    await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    res.json({ token: issueToken(user), user: publicUser(user) });
+  } catch (err) {
+    console.error('Synced login failed:', err);
+    res.status(500).json({ error: 'Login failed' });
+  }
+}
+
 // ---------- ORIGINAL LOGIN (AUTH_MODE=local) - behaviour unchanged ----------
 async function localLogin(req, res) {
   try {
@@ -185,12 +234,16 @@ async function adminLogin(req, res) {
 }
 router.post('/admin-login', adminLogin);
 
-router.post('/login', (req, res) => (isSapMode() ? sapLogin(req, res) : localLogin(req, res)));
+router.post('/login', (req, res) => {
+  if (isSapMode()) return sapLogin(req, res);
+  if (isSyncedMode()) return syncedLogin(req, res);
+  return localLogin(req, res);
+});
 
 // POST /api/v1/auth/register - ORIGINAL behaviour, available only in local mode.
 // (In SAP mode accounts come from SAP, so registration is closed.)
 router.post('/register', async (req, res) => {
-  if (isSapMode()) {
+  if (isSapMode() || isSyncedMode()) {
     return res.status(404).json({ error: 'Registration is disabled - accounts come from SAP' });
   }
   try {
